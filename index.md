@@ -1,10 +1,17 @@
 ---
-layout: home
-title: Welcome to My Blog
+title: Welcome
+layout: default
 ---
 
-Welcome to my personal blog powered by GitHub Pages and Jekyll.
+# Welcome to My Blog 👋
 
-👉 [About Me](about)
+Hi, I'm **dx x** — I write about robotics, AI, and vision-language navigation.
+
+📖 [About me](about)
 
 📝 Recent Posts:
+<ul>
+  {% for post in site.posts %}
+    <li><a href="{{ post.url }}">{{ post.title }}</a> — {{ post.date | date: "%Y-%m-%d" }}</li>
+  {% endfor %}
+</ul>
