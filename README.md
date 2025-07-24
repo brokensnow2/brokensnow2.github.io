@@ -2,7 +2,7 @@
 
 This is my personal blog powered by [GitHub Pages](https://pages.github.com/) and [Jekyll](https://jekyllrb.com/).
 
-📍 Live: [https://your-username.github.io](https://your-username.github.io)
+📍 Live: [https://your-username.github.io](https://brokensnow2.github.io)
 
 ## Features
 
