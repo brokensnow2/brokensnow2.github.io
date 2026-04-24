@@ -7,6 +7,7 @@ title: "Building..."
 description: "Maybe something happened."
 author: dx x
 email: brokensnow2@gmail.com
+github_username: brokensnow2
 url: "https://brokensnow2.github.io"
 baseurl: ""
 markdown: kramdown
