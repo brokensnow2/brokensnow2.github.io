@@ -1,9 +1,13 @@
 remote_theme: pages-themes/cayman@v0.2.0
 plugins:
-- jekyll-remote-theme # add this line to the plugins list if you already have one
-title: [Building...]
-description: [Maybe something happened.]
+  - jekyll-remote-theme
+  - jekyll-feed
+  - jekyll-sitemap
+title: "Building..."
+description: "Maybe something happened."
 author: dx x
-# 可选设置
+email: brokensnow2@gmail.com
+url: "https://brokensnow2.github.io"
+baseurl: ""
 markdown: kramdown
 show_downloads: false
