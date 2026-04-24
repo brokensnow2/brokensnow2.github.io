@@ -1,3 +1,79 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
+
+<style>
+  /* Navigation bar */
+  .site-nav {
+    background: #1a2236;
+    padding: 0.5rem 2rem;
+    display: flex;
+    gap: 1.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  .site-nav a {
+    color: #94a3b8;
+    font-size: 0.9rem;
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  .site-nav a:hover {
+    color: #38bdf8;
+    text-decoration: none;
+  }
+
+  /* Bio quick links */
+  .bio-links {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin: 0.75rem 0 1.5rem;
+  }
+  .bio-links a {
+    background: #f1f5f9;
+    color: #1e40af;
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    font-size: 0.88rem;
+    text-decoration: none;
+    border: 1px solid #dbeafe;
+    transition: background 0.2s;
+  }
+  .bio-links a:hover {
+    background: #dbeafe;
+    text-decoration: none;
+  }
+
+  /* Research interests grid */
+  .interests-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  .interest-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 1rem;
+  }
+  .interest-card p {
+    margin: 0.4rem 0 0;
+    font-size: 0.88rem;
+    color: #475569;
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var nav = document.createElement('nav');
+    nav.className = 'site-nav';
+    nav.innerHTML =
+      '<a href="/">Home</a>' +
+      '<a href="/about/">About</a>' +
+      '<a href="/projects/">Projects</a>';
+    var header = document.querySelector('.page-header');
+    if (header) header.after(nav);
+  });
+</script>

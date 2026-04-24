@@ -1,17 +1,45 @@
 ---
-title: Welcome
+title: Home
 layout: default
 ---
 
-# Welcome to My Blog 👋
+# Hi, I'm dx x 👋
 
-Hi, I'm **dx x** — I write about robotics, AI, and vision-language navigation.
+I'm a graduate researcher working on **Vision-and-Language Navigation**, **Embodied AI**, **Robotics**, and **3D Perception**.
 
-📖 [About me](about)
+<div class="bio-links">
+  <a href="/about/">About</a>
+  <a href="/projects/">Projects & Publications</a>
+  <a href="mailto:brokensnow2@gmail.com">Email</a>
+  <a href="https://github.com/brokensnow2">GitHub</a>
+</div>
 
 ---
 
-📝 Recent Posts:
+## Research Interests
+
+<div class="interests-grid">
+  <div class="interest-card">
+    <strong>🗺️ VLN</strong>
+    <p>Vision-and-Language Navigation — agents that follow natural language instructions in 3D environments.</p>
+  </div>
+  <div class="interest-card">
+    <strong>🤖 Embodied AI</strong>
+    <p>Building agents that perceive, reason, and act in physical or simulated worlds.</p>
+  </div>
+  <div class="interest-card">
+    <strong>🧊 3D Perception</strong>
+    <p>Understanding geometry and semantics from point clouds, depth maps, and multi-view imagery.</p>
+  </div>
+  <div class="interest-card">
+    <strong>🎮 Game Dev</strong>
+    <p>Side interest in procedural generation and real-time rendering as a creative outlet.</p>
+  </div>
+</div>
+
+---
+
+## Recent Posts
 
 {% if site.posts.size > 0 %}
 <ul class="post-list">
