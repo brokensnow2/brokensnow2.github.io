@@ -6,9 +6,4 @@ permalink: /projects/
 
 # Projects & Publications
 
----
-
-## Research Projects
-
-### [Project Title]
-*Ongoing — 2025*
+{% include barren-game.html %}

@@ -1,4 +1,5 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+<link rel="stylesheet" href="{{ '/assets/style.css' | relative_url }}">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 <script>document.addEventListener('DOMContentLoaded', () => hljs.highlightAll());</script>
 
@@ -72,7 +73,9 @@
     nav.innerHTML =
       '<a href="/">Home</a>' +
       '<a href="/about/">About</a>' +
-      '<a href="/projects/">Projects</a>';
+      '<a href="/projects/">Projects</a>' +
+      '<a href="/posts/">Recent Posts</a>' +
+      '<a href="/moments/">Moments</a>';
     var header = document.querySelector('.page-header');
     if (header) header.after(nav);
   });

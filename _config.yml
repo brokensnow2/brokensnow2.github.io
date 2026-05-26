@@ -12,3 +12,7 @@ url: "https://brokensnow2.github.io"
 baseurl: ""
 markdown: kramdown
 show_downloads: false
+collections:
+  moments:
+    output: true
+    permalink: /moments/:name/

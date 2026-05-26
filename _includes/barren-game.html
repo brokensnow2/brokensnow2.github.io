@@ -1,0 +1,243 @@
+<section class="barren-game" aria-label="Empty page mini game">
+  <p class="barren-line">你来到了一片荒芜的地方</p>
+  <canvas class="barren-canvas" width="720" height="260"></canvas>
+  <div class="barren-hud">
+    <span>Score <strong class="barren-score">0</strong></span>
+    <span>Time <strong class="barren-time">60</strong>s</span>
+  </div>
+  <div class="barren-actions">
+    <button class="barren-restart" type="button">Restart</button>
+    <span class="barren-status">Collect stars before the timer ends.</span>
+  </div>
+  <ol class="barren-board" aria-label="Local leaderboard"></ol>
+  <p class="barren-tip">Use left/right arrows or A/D. Press up, W, space, or tap the field to jump.</p>
+</section>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    document.querySelectorAll('.barren-game').forEach(function (game, gameIndex) {
+      var canvas = game.querySelector('.barren-canvas');
+      var scoreNode = game.querySelector('.barren-score');
+      var timeNode = game.querySelector('.barren-time');
+      var statusNode = game.querySelector('.barren-status');
+      var boardNode = game.querySelector('.barren-board');
+      var restartNode = game.querySelector('.barren-restart');
+      var ctx = canvas.getContext('2d');
+      var keys = {};
+      var storageKey = 'barren-game-leaderboard';
+      var duration = 60;
+      var score = 0;
+      var timeLeft = duration;
+      var startedAt = Date.now();
+      var finished = false;
+      var player = { x: 48, y: 198, w: 22, h: 30, vy: 0, grounded: true };
+      var stars = [
+        { x: 160, y: 158, r: 7, hit: false },
+        { x: 315, y: 118, r: 7, hit: false },
+        { x: 512, y: 166, r: 7, hit: false }
+      ];
+
+      function readBoard() {
+        try {
+          return JSON.parse(localStorage.getItem(storageKey)) || [];
+        } catch (error) {
+          return [];
+        }
+      }
+
+      function writeBoard(board) {
+        localStorage.setItem(storageKey, JSON.stringify(board.slice(0, 5)));
+      }
+
+      function renderBoard() {
+        var board = readBoard();
+        boardNode.innerHTML = '';
+        if (board.length === 0) {
+          var empty = document.createElement('li');
+          empty.textContent = 'No runs yet';
+          boardNode.appendChild(empty);
+          return;
+        }
+        board.forEach(function (entry) {
+          var item = document.createElement('li');
+          item.textContent = entry.score + ' stars · ' + entry.date;
+          boardNode.appendChild(item);
+        });
+      }
+
+      function saveScore() {
+        var board = readBoard();
+        board.push({
+          score: score,
+          date: new Date().toLocaleDateString()
+        });
+        board.sort(function (a, b) { return b.score - a.score; });
+        writeBoard(board);
+        renderBoard();
+      }
+
+      function resize() {
+        var rect = canvas.getBoundingClientRect();
+        canvas.width = Math.max(320, Math.floor(rect.width));
+        canvas.height = 260;
+      }
+
+      function resetStars() {
+        stars.forEach(function (star, index) {
+          star.x = 120 + index * Math.max(120, canvas.width / 4);
+          star.y = 120 + (index % 2) * 48;
+          star.hit = false;
+        });
+      }
+
+      function resetGame() {
+        score = 0;
+        timeLeft = duration;
+        startedAt = Date.now();
+        finished = false;
+        player.x = 48;
+        player.y = 198;
+        player.vy = 0;
+        player.grounded = true;
+        scoreNode.textContent = score;
+        timeNode.textContent = timeLeft;
+        statusNode.textContent = 'Collect stars before the timer ends.';
+        resetStars();
+      }
+
+      function drawStar(x, y, r) {
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.beginPath();
+        for (var i = 0; i < 10; i += 1) {
+          var angle = -Math.PI / 2 + i * Math.PI / 5;
+          var radius = i % 2 === 0 ? r : r * 0.45;
+          ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
+        }
+        ctx.closePath();
+        ctx.fillStyle = '#facc15';
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function updateTimer() {
+        var elapsed = Math.floor((Date.now() - startedAt) / 1000);
+        var nextTime = Math.max(0, duration - elapsed);
+        if (nextTime !== timeLeft) {
+          timeLeft = nextTime;
+          timeNode.textContent = timeLeft;
+        }
+        if (timeLeft === 0 && !finished) {
+          finished = true;
+          statusNode.textContent = 'Time is up. Your run was saved locally.';
+          saveScore();
+        }
+      }
+
+      function update() {
+        updateTimer();
+        if (finished) return;
+
+        if (keys.ArrowLeft || keys.a) player.x -= 3.2;
+        if (keys.ArrowRight || keys.d) player.x += 3.2;
+        player.x = Math.max(8, Math.min(canvas.width - player.w - 8, player.x));
+
+        player.vy += 0.55;
+        player.y += player.vy;
+        if (player.y >= 198) {
+          player.y = 198;
+          player.vy = 0;
+          player.grounded = true;
+        }
+
+        stars.forEach(function (star) {
+          if (star.hit) return;
+          var closeX = player.x < star.x + star.r && player.x + player.w > star.x - star.r;
+          var closeY = player.y < star.y + star.r && player.y + player.h > star.y - star.r;
+          if (closeX && closeY) {
+            star.hit = true;
+            score += 1;
+            scoreNode.textContent = score;
+          }
+        });
+
+        if (stars.every(function (star) { return star.hit; })) {
+          resetStars();
+        }
+      }
+
+      function drawBackground() {
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#dbeafe';
+        for (var i = 0; i < 8; i += 1) {
+          ctx.fillRect(i * 120 - 20, 214 - (i % 3) * 10, 78, 16);
+        }
+        ctx.fillStyle = '#94a3b8';
+        ctx.fillRect(0, 230, canvas.width, 4);
+      }
+
+      function drawPlayer() {
+        ctx.fillStyle = finished ? '#64748b' : '#2563eb';
+        ctx.fillRect(player.x, player.y, player.w, player.h);
+        ctx.fillStyle = '#e0f2fe';
+        ctx.fillRect(player.x + 5, player.y + 7, 4, 4);
+        ctx.fillRect(player.x + 14, player.y + 7, 4, 4);
+      }
+
+      function drawOverlay() {
+        if (!finished) return;
+        ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '700 24px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Time up', canvas.width / 2, 112);
+        ctx.font = '16px system-ui, sans-serif';
+        ctx.fillText('Score: ' + score + ' stars', canvas.width / 2, 142);
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawBackground();
+        stars.forEach(function (star) {
+          if (!star.hit) drawStar(star.x, star.y, star.r);
+        });
+        drawPlayer();
+        drawOverlay();
+      }
+
+      function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+      }
+
+      function jump() {
+        if (!finished && player.grounded) {
+          player.vy = -10;
+          player.grounded = false;
+        }
+      }
+
+      window.addEventListener('keydown', function (event) {
+        keys[event.key] = true;
+        if (event.key === 'ArrowUp' || event.key === 'w' || event.key === ' ') jump();
+      });
+      window.addEventListener('keyup', function (event) {
+        keys[event.key] = false;
+      });
+      canvas.addEventListener('pointerdown', jump);
+      restartNode.addEventListener('click', resetGame);
+      window.addEventListener('resize', function () {
+        resize();
+        resetStars();
+      });
+
+      resize();
+      renderBoard();
+      resetGame();
+      loop();
+    });
+  });
+</script>
