@@ -4,6 +4,6 @@ title: Projects & Publications
 permalink: /projects/
 ---
 
-# Projects & Publications
+# <span data-en="Projects & Publications" data-zh="项目与论文">Projects & Publications</span>
 
 {% include barren-game.html %}

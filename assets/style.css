@@ -279,6 +279,11 @@ a:hover {
     padding: 1.25rem 1rem;
   }
 
+  .site-nav {
+    gap: 0.65rem;
+    padding: 0.55rem 1rem;
+  }
+
   .post-item {
     padding: 0.8rem;
   }

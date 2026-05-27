@@ -4,7 +4,7 @@ title: Recent Posts
 permalink: /posts/
 ---
 
-# Recent Posts
+# <span data-en="Recent Posts" data-zh="近期文章">Recent Posts</span>
 
 {% if site.posts.size > 0 %}
 <ul class="post-list">

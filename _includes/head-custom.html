@@ -9,19 +9,29 @@
     background: #1a2236;
     padding: 0.5rem 2rem;
     display: flex;
-    gap: 1.5rem;
+    gap: 1rem;
     justify-content: center;
+    align-items: center;
     flex-wrap: wrap;
   }
-  .site-nav a {
+  .site-nav a,
+  .lang-toggle {
     color: #94a3b8;
     font-size: 0.9rem;
     text-decoration: none;
     transition: color 0.2s;
   }
-  .site-nav a:hover {
+  .site-nav a:hover,
+  .lang-toggle:hover {
     color: #38bdf8;
     text-decoration: none;
+  }
+  .lang-toggle {
+    border: 1px solid #334155;
+    border-radius: 999px;
+    background: #111827;
+    cursor: pointer;
+    padding: 0.15rem 0.65rem;
   }
 
   /* Bio quick links */
@@ -71,12 +81,37 @@
     var nav = document.createElement('nav');
     nav.className = 'site-nav';
     nav.innerHTML =
-      '<a href="/">Home</a>' +
-      '<a href="/about/">About</a>' +
-      '<a href="/projects/">Projects</a>' +
-      '<a href="/posts/">Recent Posts</a>' +
-      '<a href="/moments/">Moments</a>';
+      '<a href="/" data-en="Home" data-zh="首页">Home</a>' +
+      '<a href="/about/" data-en="About" data-zh="关于">About</a>' +
+      '<a href="/projects/" data-en="Projects" data-zh="项目">Projects</a>' +
+      '<a href="/posts/" data-en="Recent Posts" data-zh="近期文章">Recent Posts</a>' +
+      '<a href="/moments/" data-en="Moments" data-zh="动态">Moments</a>' +
+      '<a href="https://blog.csdn.net/qq_51503116?spm=1000.2115.3001.5343" target="_blank" rel="noopener" data-en="CSDN" data-zh="CSDN">CSDN</a>' +
+      '<a href="https://soundcloud.com/violetdove" target="_blank" rel="noopener" data-en="SoundCloud" data-zh="SoundCloud">SoundCloud</a>' +
+      '<button class="lang-toggle" type="button" aria-label="Switch language">中文</button>';
     var header = document.querySelector('.page-header');
     if (header) header.after(nav);
+
+    var toggle = nav.querySelector('.lang-toggle');
+    function applyLanguage(lang) {
+      document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en-US';
+      document.querySelectorAll('[data-en][data-zh]').forEach(function (node) {
+        node.textContent = node.getAttribute(lang === 'zh' ? 'data-zh' : 'data-en');
+      });
+      document.querySelectorAll('[data-en-html][data-zh-html]').forEach(function (node) {
+        node.innerHTML = node.getAttribute(lang === 'zh' ? 'data-zh-html' : 'data-en-html');
+      });
+      if (toggle) toggle.textContent = lang === 'zh' ? 'EN' : '中文';
+      window.dispatchEvent(new CustomEvent('site-language-change', { detail: { lang: lang } }));
+    }
+    var currentLang = localStorage.getItem('site-language') || 'en';
+    applyLanguage(currentLang);
+    if (toggle) {
+      toggle.addEventListener('click', function () {
+        currentLang = currentLang === 'zh' ? 'en' : 'zh';
+        localStorage.setItem('site-language', currentLang);
+        applyLanguage(currentLang);
+      });
+    }
   });
 </script>

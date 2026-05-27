@@ -1,21 +1,21 @@
 <section class="barren-game" aria-label="Empty page mini game">
-  <p class="barren-line">你来到了一片荒芜的地方</p>
+  <p class="barren-line" data-en="You have arrived in a barren place" data-zh="你来到了一片荒芜的地方">你来到了一片荒芜的地方</p>
   <canvas class="barren-canvas" width="720" height="260"></canvas>
   <div class="barren-hud">
-    <span>Score <strong class="barren-score">0</strong></span>
-    <span>Time <strong class="barren-time">60</strong>s</span>
+    <span><span data-en="Papers" data-zh="论文">Papers</span> <strong class="barren-score">0</strong></span>
+    <span><span data-en="Time" data-zh="时间">Time</span> <strong class="barren-time">60</strong>s</span>
   </div>
   <div class="barren-actions">
-    <button class="barren-restart" type="button">Restart</button>
-    <span class="barren-status">Collect stars before the timer ends.</span>
+    <button class="barren-restart" type="button" data-en="Restart" data-zh="重新开始">Restart</button>
+    <span class="barren-status" data-en="Grab as many papers as you can before time runs out." data-zh="趁时间还没到，多捡几篇论文。">Grab as many papers as you can before time runs out.</span>
   </div>
   <ol class="barren-board" aria-label="Local leaderboard"></ol>
-  <p class="barren-tip">Use left/right arrows or A/D. Press up, W, space, or tap the field to jump.</p>
+  <p class="barren-tip" data-en="Move with left/right or A/D. Jump with up, W, space, or a tap." data-zh="左右方向键或 A/D 移动；上方向键、W、空格，或者点一下游戏区域都能跳。">Move with left/right or A/D. Jump with up, W, space, or a tap.</p>
 </section>
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
-    document.querySelectorAll('.barren-game').forEach(function (game, gameIndex) {
+    document.querySelectorAll('.barren-game').forEach(function (game) {
       var canvas = game.querySelector('.barren-canvas');
       var scoreNode = game.querySelector('.barren-score');
       var timeNode = game.querySelector('.barren-time');
@@ -30,12 +30,18 @@
       var timeLeft = duration;
       var startedAt = Date.now();
       var finished = false;
+      var lang = localStorage.getItem('site-language') || 'en';
       var player = { x: 48, y: 198, w: 22, h: 30, vy: 0, grounded: true };
-      var stars = [
-        { x: 160, y: 158, r: 7, hit: false },
-        { x: 315, y: 118, r: 7, hit: false },
-        { x: 512, y: 166, r: 7, hit: false }
+      var papers = [
+        { x: 160, y: 158, w: 24, h: 30, hit: false },
+        { x: 315, y: 118, w: 24, h: 30, hit: false },
+        { x: 512, y: 166, w: 24, h: 30, hit: false }
       ];
+      var popups = [];
+
+      function t(en, zh) {
+        return lang === 'zh' ? zh : en;
+      }
 
       function readBoard() {
         try {
@@ -54,13 +60,13 @@
         boardNode.innerHTML = '';
         if (board.length === 0) {
           var empty = document.createElement('li');
-          empty.textContent = 'No runs yet';
+          empty.textContent = t('No runs yet', '暂无记录');
           boardNode.appendChild(empty);
           return;
         }
         board.forEach(function (entry) {
           var item = document.createElement('li');
-          item.textContent = entry.score + ' stars · ' + entry.date;
+          item.textContent = entry.score + t(' papers · ', ' 篇论文 · ') + entry.date;
           boardNode.appendChild(item);
         });
       }
@@ -82,11 +88,11 @@
         canvas.height = 260;
       }
 
-      function resetStars() {
-        stars.forEach(function (star, index) {
-          star.x = 120 + index * Math.max(120, canvas.width / 4);
-          star.y = 120 + (index % 2) * 48;
-          star.hit = false;
+      function resetPapers() {
+        papers.forEach(function (paper, index) {
+          paper.x = 120 + index * Math.max(120, canvas.width / 4);
+          paper.y = 112 + (index % 2) * 52;
+          paper.hit = false;
         });
       }
 
@@ -95,28 +101,51 @@
         timeLeft = duration;
         startedAt = Date.now();
         finished = false;
+        popups = [];
         player.x = 48;
         player.y = 198;
         player.vy = 0;
         player.grounded = true;
         scoreNode.textContent = score;
         timeNode.textContent = timeLeft;
-        statusNode.textContent = 'Collect stars before the timer ends.';
-        resetStars();
+        statusNode.textContent = t('Grab as many papers as you can before time runs out.', '趁时间还没到，多捡几篇论文。');
+        resetPapers();
       }
 
-      function drawStar(x, y, r) {
+      function drawPaperIcon(paper) {
+        var x = paper.x;
+        var y = paper.y;
         ctx.save();
         ctx.translate(x, y);
+        ctx.fillStyle = '#ffffff';
+        ctx.strokeStyle = '#2563eb';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        for (var i = 0; i < 10; i += 1) {
-          var angle = -Math.PI / 2 + i * Math.PI / 5;
-          var radius = i % 2 === 0 ? r : r * 0.45;
-          ctx.lineTo(Math.cos(angle) * radius, Math.sin(angle) * radius);
-        }
+        ctx.moveTo(0, 0);
+        ctx.lineTo(paper.w - 7, 0);
+        ctx.lineTo(paper.w, 7);
+        ctx.lineTo(paper.w, paper.h);
+        ctx.lineTo(0, paper.h);
         ctx.closePath();
-        ctx.fillStyle = '#facc15';
         ctx.fill();
+        ctx.stroke();
+        ctx.fillStyle = '#dbeafe';
+        ctx.beginPath();
+        ctx.moveTo(paper.w - 7, 0);
+        ctx.lineTo(paper.w - 7, 7);
+        ctx.lineTo(paper.w, 7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = '#93c5fd';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(5, 11);
+        ctx.lineTo(paper.w - 5, 11);
+        ctx.moveTo(5, 17);
+        ctx.lineTo(paper.w - 4, 17);
+        ctx.moveTo(5, 23);
+        ctx.lineTo(paper.w - 8, 23);
+        ctx.stroke();
         ctx.restore();
       }
 
@@ -129,13 +158,22 @@
         }
         if (timeLeft === 0 && !finished) {
           finished = true;
-          statusNode.textContent = 'Time is up. Your run was saved locally.';
+          statusNode.textContent = t('Time is up. Saved to the local board.', '时间到！这局已经记到本地排行榜了。');
           saveScore();
         }
       }
 
+      function updatePopups() {
+        popups.forEach(function (popup) {
+          popup.y -= 0.8;
+          popup.life -= 1;
+        });
+        popups = popups.filter(function (popup) { return popup.life > 0; });
+      }
+
       function update() {
         updateTimer();
+        updatePopups();
         if (finished) return;
 
         if (keys.ArrowLeft || keys.a) player.x -= 3.2;
@@ -150,19 +188,20 @@
           player.grounded = true;
         }
 
-        stars.forEach(function (star) {
-          if (star.hit) return;
-          var closeX = player.x < star.x + star.r && player.x + player.w > star.x - star.r;
-          var closeY = player.y < star.y + star.r && player.y + player.h > star.y - star.r;
+        papers.forEach(function (paper) {
+          if (paper.hit) return;
+          var closeX = player.x < paper.x + paper.w && player.x + player.w > paper.x;
+          var closeY = player.y < paper.y + paper.h && player.y + player.h > paper.y;
           if (closeX && closeY) {
-            star.hit = true;
+            paper.hit = true;
             score += 1;
             scoreNode.textContent = score;
+            popups.push({ x: paper.x + paper.w / 2, y: paper.y - 4, life: 55 });
           }
         });
 
-        if (stars.every(function (star) { return star.hit; })) {
-          resetStars();
+        if (papers.every(function (paper) { return paper.hit; })) {
+          resetPapers();
         }
       }
 
@@ -185,6 +224,18 @@
         ctx.fillRect(player.x + 14, player.y + 7, 4, 4);
       }
 
+      function drawPopups() {
+        ctx.save();
+        ctx.font = '700 16px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        popups.forEach(function (popup) {
+          ctx.globalAlpha = Math.min(1, popup.life / 25);
+          ctx.fillStyle = '#be123c';
+          ctx.fillText(t('Paper +1', '论文+1'), popup.x, popup.y);
+        });
+        ctx.restore();
+      }
+
       function drawOverlay() {
         if (!finished) return;
         ctx.fillStyle = 'rgba(15, 23, 42, 0.72)';
@@ -192,18 +243,19 @@
         ctx.fillStyle = '#ffffff';
         ctx.font = '700 24px system-ui, sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('Time up', canvas.width / 2, 112);
+        ctx.fillText(t('Time up', '时间到'), canvas.width / 2, 112);
         ctx.font = '16px system-ui, sans-serif';
-        ctx.fillText('Score: ' + score + ' stars', canvas.width / 2, 142);
+        ctx.fillText(t('Score: ', '得分：') + score + t(' papers', ' 篇论文'), canvas.width / 2, 142);
       }
 
       function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawBackground();
-        stars.forEach(function (star) {
-          if (!star.hit) drawStar(star.x, star.y, star.r);
+        papers.forEach(function (paper) {
+          if (!paper.hit) drawPaperIcon(paper);
         });
         drawPlayer();
+        drawPopups();
         drawOverlay();
       }
 
@@ -227,11 +279,18 @@
       window.addEventListener('keyup', function (event) {
         keys[event.key] = false;
       });
+      window.addEventListener('site-language-change', function (event) {
+        lang = event.detail.lang;
+        renderBoard();
+        if (!finished) {
+          statusNode.textContent = t('Grab as many papers as you can before time runs out.', '趁时间还没到，多捡几篇论文。');
+        }
+      });
       canvas.addEventListener('pointerdown', jump);
       restartNode.addEventListener('click', resetGame);
       window.addEventListener('resize', function () {
         resize();
-        resetStars();
+        resetPapers();
       });
 
       resize();

@@ -4,9 +4,9 @@ title: Moments
 permalink: /moments/
 ---
 
-# Moments
+# <span data-en="Moments" data-zh="动态">Moments</span>
 
-Small updates from music, videos, photos, and other fragments that do not need to become technical posts.
+<p data-en="Small updates: music, videos, photos, and fragments that do not need to become full technical posts." data-zh="这里放一点近况，比如音乐、视频、照片，或者一些还没整理成文章的小片段。">Small updates: music, videos, photos, and fragments that do not need to become full technical posts.</p>
 
 {% assign moments = site.moments | sort: "date" | reverse %}
 {% if moments.size > 0 %}

@@ -4,7 +4,7 @@ title: "Window Light"
 date: 2026-05-25
 type: photo
 icon: "📷"
-description: "A small patch of evening light landed on the desk and made the whole room look staged."
+description: "Evening light hit the desk just right for a few minutes."
 ---
 
-Nothing dramatic. Just the kind of light that makes ordinary objects look like they were waiting to be noticed.
+Nothing dramatic. Just one of those moments where ordinary objects suddenly look arranged.
