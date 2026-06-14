@@ -4,7 +4,7 @@ title: About
 permalink: /about/
 ---
 
-<p data-en-html="Hi, I'm <strong>dx x</strong>." data-zh-html="你好，我是 <strong>dx x</strong>。">Hi, I'm <strong>dx x</strong>.</p>
+<p data-en-html="Hi, I'm <strong>Brokensnow2</strong>." data-zh-html="你好，我是 <strong>Brokensnow2</strong>。">Hi, I'm <strong>Brokensnow2</strong>.</p>
 
 ---
 

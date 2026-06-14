@@ -3,7 +3,7 @@ title: Home
 layout: default
 ---
 
-# <span data-en="Hi, I'm dx x" data-zh="你好，我是 dx x">Hi, I'm dx x</span>
+# <span data-en="Hi, I'm Brokensnow2" data-zh="你好，我是 Brokensnow2">Hi, I'm Brokensnow2</span>
 
 <p data-en-html="I work on <strong>Vision-and-Language Navigation</strong>, <strong>Embodied AI</strong>, <strong>Robotics</strong>, and <strong>3D Perception</strong>. Outside research, I also like tinkering with embedded systems, music, and small game-dev ideas." data-zh-html="我现在主要做 <strong>视觉语言导航</strong>、<strong>具身智能</strong>、<strong>机器人</strong> 和 <strong>三维感知</strong> 相关的研究，也会折腾一些嵌入式、音乐和游戏开发的小东西。">I work on <strong>Vision-and-Language Navigation</strong>, <strong>Embodied AI</strong>, <strong>Robotics</strong>, and <strong>3D Perception</strong>. Outside research, I also like tinkering with embedded systems, music, and small game-dev ideas.</p>
 
