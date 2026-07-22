@@ -1,12 +1,14 @@
 ---
 layout: post
 title: "用 Isaac Sim 为 openpi 采集 xArm6 数据：从 DOF 调试到 marker teleop"
-date: 2026-06-14
+date: 2026-07-01
 description: "在 Isaac Sim 5.1 中加载移动底盘 + xArm6 机器人，调通夹爪 DOF、marker teleop、episode 记录，并为后续 openpi / LeRobot 数据转换做准备。"
 categories: [robotics, embodied-ai, data-collection]
 ---
 
 这篇文章记录的是一次从仿真机器人加载到 episode 数据落盘的完整过程。目标不是“把 Isaac Sim 打开”，而是搭出一条后续能服务于 openpi / LeRobot 微调的数据采集链路。
+
+这也是 xArm + openpi 实验系列的第一篇：先把数据怎么来、怎么保存、怎么确认可靠讲清楚，再谈后面的微调和远程推理。
 
 TL;DR:
 
@@ -19,7 +21,14 @@ Isaac Sim 5.1
   -> 后续转换为 LeRobot / openpi 可用的数据
 ```
 
-本文里的路径来自我的本地环境，读者需要替换成自己的 openpi、Isaac Sim 和资产仓库路径。
+为了避免把个人机器目录写进博客，本文统一使用两个环境变量：
+
+```bash
+export OPENPI_ROOT=/path/to/openpi
+export ISAAC_SIM_ROOT=/path/to/isaac-sim-standalone-5.1.0
+```
+
+读者只需要把它们替换成自己的 openpi 和 Isaac Sim 安装目录。后文出现的 `third_party/...` 都是相对于 openpi 仓库根目录的路径。
 
 ## 背景
 
@@ -38,7 +47,9 @@ pick up the red block
 指令: 当前 episode 对应的 prompt
 ```
 
-这些数据后面可以转换成 LeRobot 风格的数据集，再拿去微调 openpi 里的 pi0 / pi0-fast 类模型。更长远一点，这条链路也可以扩展到自动生成 `press_button`、`pick_cup`、`place_cup`、`pick_colored_object` 这类近距离操作任务。
+这些数据后面可以转换成 LeRobot 风格的数据集，再拿去微调 openpi 里的 π0、π0.5 或 π0-FAST。更长远一点，这条链路也可以扩展到自动生成 `press_button`、`pick_cup`、`place_cup`、`pick_colored_object` 这类近距离操作任务。
+
+这里先强调一点：采集机器人数据和录屏不是一回事。视频看起来正常，只能证明渲染画面正常；真正可用于训练的数据还需要保证图像、状态、动作和时间戳在同一个 step 上正确对齐。
 
 ## 实验环境
 
@@ -79,19 +90,22 @@ third_party/isaac_sim_AGX/AGX_description/src/1557/urdf/1557_all/1557_all.usd
 每个 index t = 一个 step
 ```
 
-目前保存的字段包括：
+人工采集目前保存的主要字段包括：
 
 ```text
 wrist_image: [T, H, W, 3], uint8
-joints: [T, 6]
-gripper: [T, 1]
-actions: [T, 7]
-timestamp: [T]
+joints: [T, 6], float32
+gripper: [T, 1], float32
+actions: [T, 7], float32
+timestamp: [T], float64
 prompt: str
 target_marker_position: [T, 3]
 base_wheel_velocity: [T]
+base_turn_velocity: [T]
 fps: scalar / metadata
 ```
+
+这里还有一个当前人工脚本的实现细节：`gripper` 记录的是归一化软件目标 `gripper_target`，不一定是 PhysX 中手指真正到达的位置。如果夹爪被物体挡住，命令值和实测值会不同。后续自动采集脚本已经改成从主夹爪 DOF 反算实测 `[0,1]` 状态；如果人工数据也要用于正式训练，最好做同样修改。
 
 其中 `actions` 采用 7 维：
 
@@ -102,6 +116,42 @@ fps: scalar / metadata
 也就是说，即使用 marker、IK 或 scripted expert 来控制机械臂，最终记录进数据集里的动作仍然保持为关节空间目标。这对后续和 openpi 的 xArm policy 对接会更直接。
 
 ![episode_0000.npz 内部保存的字段](/assets/posts/xarm-isaac-openpi/episode-fields.png)
+
+## 状态和动作为什么不能随便记
+
+机器人模仿学习通常希望一条样本表达：
+
+```text
+给定 t 时刻看到的图像和机器人状态
+预测 t 之后应该执行的动作
+```
+
+因此下面几个概念要分开：
+
+```text
+实测关节位置: PhysX 当前真正模拟出来的 joints
+关节目标: 控制器希望机械臂到达的 joint_targets
+实测夹爪状态: 手指当前真正到达的位置
+夹爪命令: 软件希望夹爪打开或闭合到什么程度
+```
+
+例如夹爪命令已经是 `1.0`，不代表手指真的完全闭合。如果中间夹住了物体，实测夹爪可能停在 `0.6`。模型的 state 应该使用实测值，而监督 action 才使用目标值。
+
+人工 teleop 脚本里，`actions` 记录的是最近一次下发给控制器的目标。后续做自动采集时，我更倾向于只保存实测状态，再在转换阶段构造：
+
+```text
+actions[t] = concat(joints[t + 1], gripper[t + 1])
+```
+
+这样能避免把 RMPFlow 在 60 Hz 物理循环里给出的微小单步目标直接当成 10 Hz 训练动作。否则很容易得到：
+
+```text
+action[t] ≈ state[t]
+```
+
+模型最后学到的就是“保持不动”。
+
+人工脚本当前按墙上时钟 `time.time()` 判断采样间隔，而自动采集会按 physics step 计算仿真时间。GUI 卡顿时，墙上时钟采样可能让相邻记录对应的物理步数不一致。因此人工模式更适合调试和少量示范；需要批量、可复现的数据时，最好使用仿真时钟。
 
 ## 子模块提交顺序
 
@@ -117,35 +167,39 @@ third_party/isaac_sim_AGX
 
 ```diff
 diff --git a/third_party/isaac_sim_AGX b/third_party/isaac_sim_AGX
-index 19c0e5e..dee99b7 160000
+index <old-commit>..<new-commit> 160000
 --- a/third_party/isaac_sim_AGX
 +++ b/third_party/isaac_sim_AGX
 @@ -1 +1 @@
--Subproject commit 19c0e5ee997c609717367e57e0c99b903077b669
-+Subproject commit dee99b764ace0aeb69dc80cbea043a24cc3e944f-dirty
+-Subproject commit <old-commit>
++Subproject commit <new-commit>-dirty
 ```
 
-意思是：主仓库原来记录的子模块 commit 是 `19c0e5e`，现在本地切到了 `dee99b7`，并且子模块内部还有未提交修改。
+意思是：主仓库记录的子模块 commit 已经变化，并且 `-dirty` 表示子模块内部还有未提交修改。
 
 正确顺序是先提交子模块，再提交主仓库里的子模块指针：
 
 ```bash
-cd third_party/isaac_sim_AGX
+cd "$OPENPI_ROOT/third_party/isaac_sim_AGX"
 git add ros2_car_model_ws/src/scripts/collect_xarm_episode.py
 git commit -m "Update Isaac xArm episode collection controls"
-git push origin master
+git push origin YOUR_BRANCH
 
-cd /Data/xiaodx/openpi
+cd "$OPENPI_ROOT"
 git add third_party/isaac_sim_AGX
 git commit -m "Update Isaac Sim AGX submodule"
 ```
+
+这里不应该照抄某个固定分支名。用自己的开发分支和远程仓库即可。
 
 ## 启动脚本
 
 不要用 openpi 的 Python 环境直接跑 Isaac Sim 脚本。Isaac Sim 有自己的 Python、扩展系统和动态库加载方式，应该使用它自带的 `python.sh`：
 
 ```bash
-/Data/xiaodx/isaac-sim-standalone-5.1.0-linux-x86_64/python.sh \
+cd "$OPENPI_ROOT"
+
+"$ISAAC_SIM_ROOT/python.sh" \
   third_party/isaac_sim_AGX/ros2_car_model_ws/src/scripts/collect_xarm_episode.py \
   --mode marker \
   --output-dir /tmp/xarm_raw_data \
@@ -158,11 +212,13 @@ git commit -m "Update Isaac Sim AGX submodule"
 
 ![使用 Isaac Sim 自带 python.sh 启动数据采集脚本](/assets/posts/xarm-isaac-openpi/launch-command.png)
 
-## 三个 Isaac / PhysX 基础概念
+## 四个 Isaac / PhysX 基础概念
 
-调机器人之前，先把三个概念分清会省很多时间。
+调机器人之前，先把几个概念分清会省很多时间。
 
-DOF，即 Degree of Freedom。机器人里的一个可动关节通常对应一个 DOF。例如：
+### DOF
+
+DOF 即 Degree of Freedom。机器人里的一个可动关节通常对应一个 DOF。例如：
 
 ```text
 joint1 ~ joint6      xArm6 的六个关节
@@ -178,9 +234,36 @@ dc.set_dof_position_target(handle, target_position)
 dc.set_dof_velocity_target(handle, target_velocity)
 ```
 
-Articulation 可以理解为一整棵由刚体和关节连起来的机器人动力学结构。当前机器人里，底盘、轮子、云台、xArm 和夹爪都在同一个或相关 articulation 结构里。因此一个夹爪 mimic joint、root joint 或 drive 参数设置不合理，都可能影响整个机器人稳定性。
+### Articulation
+
+Articulation 可以理解为一整棵由刚体和关节连起来的机器人动力学结构。当前机器人里，底盘、轮子、云台、xArm 和夹爪都在同一个或相关 articulation 结构里。
+
+因此一个夹爪 mimic joint、root joint 或 drive 参数设置不合理，都可能影响整个机器人稳定性。
+
+### Kinematic
 
 Kinematic 刚体通常由外部直接设置位姿，不由物理力自然推动。排查夹爪抖动时可以临时试一下，但如果夹爪仍属于 articulation，强行改成 kinematic 可能破坏关节关系，所以不适合作为正常采集方案。
+
+### USD 和 URDF
+
+USD 是 Isaac Sim 真正用来渲染和做 PhysX 仿真的场景。机器人材质、刚体、碰撞、质量、关节 drive、相机和灯光都在 USD Stage 里。
+
+URDF 更像运动学和机器人结构描述。RMPFlow 底层的 Lula 会读取 URDF，在自己的模型里计算 FK、Jacobian、关节限位和碰撞球。
+
+如果 USD 和 URDF 的关节零位、root link、固定挂载链或末端 frame 不一致，就会出现两个“数学世界”：
+
+```text
+PhysX 认为末端在位置 A
+Lula 认为末端在位置 B
+```
+
+这时 RMPFlow 即使内部已经收敛，画面里的机械臂也可能离 marker 很远。调试时可以计算：
+
+```python
+model_gap = np.linalg.norm(lula_ee_position - usd_ee_position)
+```
+
+这个误差应该接近 0，而不是靠放大容差掩盖。
 
 ## 坑 1：确认夹爪真正的 DOF
 
@@ -216,7 +299,7 @@ USD 里的 prim 名称和 articulation 里的 DOF 名称不一定一样。比如
 /World/Robot/gripper/joints/Joint_2 [PhysicsRevoluteJoint]
 ```
 
-所以真正应该控制的是：
+所以人工采集时真正应该控制的是：
 
 ```bash
 --gripper-dof Joint_1
@@ -237,6 +320,8 @@ USD 里的 prim 名称和 articulation 里的 DOF 名称不一定一样。比如
 gripper_target=0.0 -> Joint_1 targetPosition=0.0
 gripper_target=1.0 -> Joint_1 targetPosition=0.5
 ```
+
+如果换了另一个夹爪 USD，这两个位置不能照抄。应该先打印 DOF limits，再肉眼确认 open/closed 的方向和范围。
 
 ## 坑 2：避免键盘快捷键冲突
 
@@ -314,10 +399,41 @@ if not args.disable_arm_control and state.arm_command_dirty:
     state.arm_command_dirty = False
 
 if has_mobile_base and state.base_command_dirty:
-    set_base_steering_straight(dc, base_steering_handles)
-    set_base_wheel_velocity(dc, base_wheel_handles, state.base_wheel_velocity)
+    apply_base_motion(
+        dc,
+        base_wheel_handles,
+        base_steering_handles,
+        state.base_wheel_velocity,
+        state.base_turn_velocity,
+    )
     state.base_command_dirty = False
 ```
+
+## 坑 4：RMPFlow 不能只拿 position target
+
+PhysX 的关节 drive 可以近似理解为一个 PD 控制器：
+
+```text
+torque = Kp * (position_target - position)
+       + Kd * (velocity_target - velocity)
+```
+
+RMPFlow 输出的 `ArticulationAction` 同时包含 joint position 和 joint velocity。正确路径是：
+
+```python
+action = articulation_policy.get_next_articulation_action(physics_dt)
+robot.apply_action(action)
+```
+
+如果中间层只取 position，再逐关节调用：
+
+```python
+dc.set_dof_position_target(handle, target)
+```
+
+velocity feedforward 就丢了。控制器会一边追移动的位置目标，一边把当前速度往 0 拉，表现通常是跟随很慢、误差降不下去或执行超时。
+
+另一个问题是 USD 导入后的 drive 参数可能严重欠阻尼。例如 stiffness 很大、damping 却接近 0，机械臂每次追新目标都会过冲和回弹。当前脚本会提供运行时覆盖参数，但这些值只适用于当前资产，换机器人后仍需要重新验证。
 
 ## 从关节控制到 marker teleop
 
@@ -330,14 +446,17 @@ if has_mobile_base and state.base_command_dirty:
 很难表达“末端往前一点、往上抬一点”
 ```
 
-更自然的方式是在场景里放一个 target marker，通过键盘移动 marker，再让机械臂末端用 IK 跟随 marker。
+更自然的方式是在场景里放一个 target marker，通过键盘或 Isaac Move gizmo 移动 marker，再让机械臂末端用 IK 跟随 marker。
 
-键盘控制如下：
+当前脚本的 marker 控制如下：
 
 ```text
-W/S: marker 前后
-A/D: marker 左右
-Q/E: marker 上下
+↑/↓: marker 沿世界 X 方向移动
+←/→: marker 沿世界 Y 方向移动
+PageUp/PageDown: marker 沿世界 Z 方向移动
+鼠标 Move gizmo: 直接拖动 marker
+G/Enter: 手动触发跟随
+H: 停止当前 marker 执行
 Z/X: 夹爪开合
 R: 开始/暂停记录
 N: 保存 episode
@@ -345,19 +464,31 @@ C: 清空缓存
 Esc: 退出
 ```
 
-第一版 marker IK 使用 Jacobian 差分 IK，只控制末端位置，不控制姿态：
+旧版本曾使用 `W/A/S/D/Q/E` 移动 marker。如果自己的脚本来自较早 commit，应以启动时终端打印的键盘说明为准。
+
+第一版 marker IK 使用 Jacobian 差分 IK：
 
 ```python
-lhs = linear_jacobian @ linear_jacobian.T + np.eye(3, dtype=np.float32) * float(damping**2)
-delta_q = linear_jacobian.T @ np.linalg.solve(lhs, error * float(gain))
-delta_q = np.clip(delta_q, -abs(max_joint_step), abs(max_joint_step))
+lhs = (
+    linear_jacobian @ linear_jacobian.T
+    + np.eye(3, dtype=np.float32) * float(damping**2)
+)
+delta_q = linear_jacobian.T @ np.linalg.solve(
+    lhs,
+    error * float(gain),
+)
+delta_q = np.clip(
+    delta_q,
+    -abs(max_joint_step),
+    abs(max_joint_step),
+)
 ```
 
-这不是最完整的机械臂控制器，但作为第一版采集入口已经够用：它能把“移动末端”的操作从六个关节目标里解放出来。
+它表达的是：先计算末端位置误差，再通过 Jacobian 的阻尼伪逆得到一小步关节增量。
+
+这不是完整的全局运动规划器。它不知道一条路径是否会碰撞，也可能在奇异点附近退化，但作为第一版采集入口已经够用：它能把“移动末端”的操作从六个关节目标里解放出来。
 
 ![marker teleop 记录过程中的终端日志](/assets/posts/xarm-isaac-openpi/teleop-recording-log.png)
-
-图里能看到脚本打印的键盘说明、记录帧数、marker target，以及最终保存到 `/tmp/xarm_raw_data/episode_0000.npz`。
 
 ## 给 marker 加工作空间限制
 
@@ -377,15 +508,15 @@ marker 跑得很远
 
 1. 限制 marker 相对初始位置的最大半径。
 2. 限制 marker 的 z 高度。
-3. 检测 IK 是否卡住。
+3. 检测 IK 是否卡住或长时间没有进展。
 
 我常用的调试参数是：
 
 ```bash
---marker-step 0.01
---marker-max-radius 0.25
---ik-gain 0.35
---ik-max-joint-step 0.015
+--marker-step 0.01 \
+--marker-max-radius 0.25 \
+--ik-gain 0.35 \
+--ik-max-joint-step 0.015 \
 --ik-debug
 ```
 
@@ -406,6 +537,8 @@ if state.marker_stuck_steps >= args.ik_max_stuck_steps:
     state.marker_stuck_steps = 0
 ```
 
+工作空间点云只能回答“这个位置附近是否出现过可达样本”，不能证明目标姿态、整条路径和碰撞也可行。所以它应该作为便宜的预检查，而不是运动规划成功证明。
+
 ## 运行时绑定材质
 
 仿真模型默认可能是全白的。云台相机或末端相机看机械臂时，白色模型容易和背景混在一起，也不像现实中的银色金属 xArm。
@@ -421,14 +554,6 @@ xArm: 银色金属
 底盘/其他结构: 深灰色
 ```
 
-如果启动时看到：
-
-```text
-已绑定机器人调试材质: xArm silver=21, gripper=15, camera/pan_tilt=19, base=70
-```
-
-说明材质绑定成功。
-
 如果想保留 USD 原始外观，可以加：
 
 ```bash
@@ -438,14 +563,36 @@ xArm: 银色金属
 材质创建的核心逻辑如下：
 
 ```python
-def create_preview_material(stage, path, color, *, metallic=0.0, roughness=0.35):
+def create_preview_material(
+    stage,
+    path,
+    color,
+    *,
+    metallic=0.0,
+    roughness=0.35,
+):
     material = UsdShade.Material.Define(stage, path)
-    shader = UsdShade.Shader.Define(stage, f"{path}/PreviewSurface")
+    shader = UsdShade.Shader.Define(
+        stage,
+        f"{path}/PreviewSurface",
+    )
     shader.CreateIdAttr("UsdPreviewSurface")
-    shader.CreateInput("diffuseColor", Sdf.ValueTypeNames.Color3f).Set(Gf.Vec3f(*color))
-    shader.CreateInput("metallic", Sdf.ValueTypeNames.Float).Set(float(metallic))
-    shader.CreateInput("roughness", Sdf.ValueTypeNames.Float).Set(float(roughness))
-    material.CreateSurfaceOutput().ConnectToSource(shader.ConnectableAPI(), "surface")
+    shader.CreateInput(
+        "diffuseColor",
+        Sdf.ValueTypeNames.Color3f,
+    ).Set(Gf.Vec3f(*color))
+    shader.CreateInput(
+        "metallic",
+        Sdf.ValueTypeNames.Float,
+    ).Set(float(metallic))
+    shader.CreateInput(
+        "roughness",
+        Sdf.ValueTypeNames.Float,
+    ).Set(float(roughness))
+    material.CreateSurfaceOutput().ConnectToSource(
+        shader.ConnectableAPI(),
+        "surface",
+    )
     return material
 ```
 
@@ -456,7 +603,9 @@ def create_preview_material(stage, path, color, *, metallic=0.0, roughness=0.35)
 稳定采集可以先用：
 
 ```bash
-/Data/xiaodx/isaac-sim-standalone-5.1.0-linux-x86_64/python.sh \
+cd "$OPENPI_ROOT"
+
+"$ISAAC_SIM_ROOT/python.sh" \
   third_party/isaac_sim_AGX/ros2_car_model_ws/src/scripts/collect_xarm_episode.py \
   --mode marker \
   --output-dir /tmp/xarm_raw_data \
@@ -491,6 +640,35 @@ def create_preview_material(stage, path, color, *, metallic=0.0, roughness=0.35)
 
 ![采集后生成的 episode_0000.npz](/assets/posts/xarm-isaac-openpi/episode-file.png)
 
+## 保存后先检查，不要直接训练
+
+可以先运行仓库里的检查脚本：
+
+```bash
+cd "$OPENPI_ROOT"
+
+uv run examples/xarm/inspect_xarm_npz.py \
+  /tmp/xarm_raw_data \
+  --preview-dir /tmp/xarm_preview \
+  --num-preview-frames 6
+```
+
+至少应该检查：
+
+```text
+wrist_image 是否是 [T,H,W,3] uint8
+joints 是否是 [T,6]
+gripper 是否是 [T,1]
+actions 是否是 [T,7]
+所有主通道的 T 是否一致
+timestamp 是否严格递增
+关节和夹爪是否存在 NaN / Inf
+随机抽帧是否能看到正确的相机画面
+prompt 是否与当前任务一致
+```
+
+如果某个通道少了一帧，不建议简单裁剪到最短长度。图像和动作可能已经错位，应该回到采集循环检查是哪一个 reader 或分支漏记了数据。
+
 ## 后续：自动生成 VLA episode
 
 手动录制能产生质量比较高的数据，但不适合录 1000 条 episode。近距离 VLA 更适合用自动化生成器。
@@ -505,7 +683,8 @@ reset scene
 读取目标真实 pose / bbox / normal
 生成末端目标位姿
 用 IK / RMPFlow / 轨迹模板执行
-记录 image + joints + action + prompt + timestamp
+记录 image + joints + gripper + prompt + timestamp
+验证抓取是否真正成功
 保存 episode
 ```
 
@@ -520,16 +699,6 @@ semantic label 只负责告诉脚本：
 
 真正的动作仍然需要我们写专家策略。
 
-计划中的近距离 VLA 任务包括：
-
-```text
-press_button
-pick_cup
-place_cup
-pick_colored_object
-put_object_on_target
-```
-
 以 `press_button` 为例：
 
 ```text
@@ -540,6 +709,7 @@ oracle 找到 floor_3 button
 生成 approach pose
 生成 press pose
 IK 跟踪 approach -> press -> retreat
+验证按钮是否被按下
 保存 episode
 ```
 
@@ -553,28 +723,30 @@ oracle 找到 red cup
 接近
 闭合夹爪
 抬起
+等待物体稳定
+验证物体抬升高度和末端距离
 保存 episode
 ```
+
+正式数据里不应该默认使用把物体直接吸附到夹爪的 teleport/latch。它可以帮助调试轨迹，但会绕过真实的接触、摩擦和夹持力，让“抓取成功”失去意义。
 
 ## 小结
 
 到这里，基础链路已经跑通：
 
 ```text
-加载 1557_all.usd
+加载机器人 USD
 确认 xArm、底盘、云台、夹爪 DOF
 识别夹爪主动关节 Joint_1
 避开 Isaac Sim 快捷键冲突
 解决持续下发 target 导致的机器人抖动
+理解 RMPFlow position + velocity 的下发方式
 实现 marker teleop
 加入 marker 工作空间限制和 IK 卡住检测
 运行时绑定机器人材质
-保存 openpi / LeRobot 后续可用的 episode 数据
+保存并检查 episode_0000.npz
 ```
 
 对我来说，最关键的收获是：机器人数据采集不是从训练模型开始的，而是先把控制、记录、保存、检查和后续格式转换这一整条链路打通。
 
-接下来主要有两条线：
-
-1. 继续增强 teleop：加入姿态控制、拖拽交互、轨迹平滑，以及更稳定的 IK / RMPFlow。
-2. 做近距离 VLA 自动采集：实现 semantic scene generator 和 scripted expert，自动生成 `press_button`、`pick_cup`、`place_cup`、`pick_colored_object`、`put_object_on_target` episode。
+只有当图像、状态、动作、时间和机器人关节约定都一致时，保存出来的 episode 才真的有训练价值。

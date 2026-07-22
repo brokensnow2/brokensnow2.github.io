@@ -3,7 +3,7 @@
   background-color: #1e293b;
   background-image:
     linear-gradient(135deg, rgba(15, 23, 42, 0.82), rgba(30, 64, 175, 0.48)),
-    url("/assets/anime-header.png") !important;
+    url("/assets/anime-header.jpg") !important;
   background-position: center !important;
   background-size: cover !important;
   min-height: 230px;
